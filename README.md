@@ -4,7 +4,7 @@
 The Casting Agency project simplifies and streamlines the process of managing movies and actors.
 
 ## API URL
-- **API URL:** [your-deployed-url]
+- **API URL:** [https://capstone-4-b4hp.onrender.com]
 
 ## Project Dependencies
 - Flask
