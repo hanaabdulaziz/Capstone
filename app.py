@@ -9,6 +9,41 @@ from models import Actor, Movie
 
 db = SQLAlchemy()
 
+def requires_auth(permission=''):
+    def requires_auth_decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            auth_header = request.headers.get('Authorization', None)
+            if not auth_header:
+                return jsonify({'error': 'Authorization header is missing'}), 401
+
+            parts = auth_header.split()
+            if parts[0].lower() != 'bearer':
+                return jsonify({'error': 'Authorization header must start with Bearer'}), 401
+            elif len(parts) == 1:
+                return jsonify({'error': 'Token not found'}), 401
+            elif len(parts) > 2:
+                return jsonify({'error': 'Authorization header must be Bearer token'}), 401
+
+            token = parts[1]
+
+            try:
+                response = requests.get(f'https://{os.getenv("AUTH0_DOMAIN")}/userinfo', headers={'Authorization': f'Bearer {token}'})
+                response.raise_for_status()
+                user_info = response.json()
+                user_permissions = user_info.get('permissions', [])
+
+                if permission not in user_permissions:
+                    return jsonify({'error': 'Permission not found'}), 403
+            except requests.exceptions.HTTPError as err:
+                return jsonify({'error': 'Invalid token'}), 401
+            except requests.exceptions.RequestException as e:
+                return jsonify({'error': 'Invalid token'}), 401
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return requires_auth_decorator
+
 def create_app(test_config=None):
     app = Flask(__name__)
     CORS(app)
@@ -111,41 +146,7 @@ def create_app(test_config=None):
 
     return app
 
-def requires_auth(permission=''):
-    def requires_auth_decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            auth_header = request.headers.get('Authorization', None)
-            if not auth_header:
-                return jsonify({'error': 'Authorization header is missing'}), 401
-
-            parts = auth_header.split()
-            if parts[0].lower() != 'bearer':
-                return jsonify({'error': 'Authorization header must start with Bearer'}), 401
-            elif len(parts) == 1:
-                return jsonify({'error': 'Token not found'}), 401
-            elif len(parts) > 2:
-                return jsonify({'error': 'Authorization header must be Bearer token'}), 401
-
-            token = parts[1]
-
-            try:
-                response = requests.get(f'https://{os.getenv("AUTH0_DOMAIN")}/userinfo', headers={'Authorization': f'Bearer {token}'})
-                response.raise_for_status()
-                user_info = response.json()
-                user_permissions = user_info.get('permissions', [])
-
-                if permission not in user_permissions:
-                    return jsonify({'error': 'Permission not found'}), 403
-            except requests.exceptions.HTTPError as err:
-                return jsonify({'error': 'Invalid token'}), 401
-            except requests.exceptions.RequestException as e:
-                return jsonify({'error': 'Invalid token'}), 401
-
-            return f(*args, **kwargs)
-        return decorated_function
-    return requires_auth_decorator
+app = create_app()
 
 if __name__ == '__main__':
-    app = create_app()
     app.run(host='0.0.0.0', port=8080, debug=True)
